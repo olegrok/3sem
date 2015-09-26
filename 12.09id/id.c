@@ -1,0 +1,13 @@
+#include <sys/types.h>
+#include <unistd.h>
+#include <stdio.h>
+int main()
+{
+	uid_t uid = getuid();
+        uid_t euid = geteuid();
+	uid_t gid = getgid();
+        uid_t egid = getegid();
+	printf("UID(%d)\nEUID(%d)\n", uid, euid);
+	printf("GID(%d)\nEGID(%d)\n", gid, egid);
+	return 0;
+}

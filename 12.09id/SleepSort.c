@@ -1,0 +1,31 @@
+#include <stdlib.h>
+#include <stdio.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+ 
+int main(int c, char **mass)
+{
+	int array[4] = {5, 2, 1, 3};
+	int i = 0, fk = 0, j = 0, num = 0;
+        for(i = 1; i < c; i++)
+	{	
+		fk = fork();
+		if(!fk)
+		{
+			num = atoi(mass[i]);
+			sleep(num);
+			printf("%d ", num);
+			break;	
+		}
+		else
+				continue;			
+		
+		
+
+	}
+	for(i = 1; i < c; i++)
+		wait(0);
+	printf("\n");
+        return 0;
+}
