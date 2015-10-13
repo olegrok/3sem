@@ -8,6 +8,9 @@
 #include <time.h>
 #include <getopt.h>
 #include <math.h>
+#include <grp.h>
+#include <pwd.h>
+
 
 char* bits_to_rwx(int bits)
 {
@@ -120,6 +123,15 @@ void info(char* path, char name[], int flag, unsigned char type)
 		printf("%d  ", ms.st_uid);
 		printf("%d  ", ms.st_gid);
 	}
+	else
+	{
+		struct group* grp = 0;
+		struct passwd* usr = 0;
+		grp = getgrgid(ms.st_gid);
+		usr = getpwuid(ms.st_uid);
+		printf("%s  ", usr -> pw_name);
+		printf("%s  ", grp -> gr_name);
+	}
 	printf("%s  ", name);
 	printf("%s", ctime(&ms.st_mtime));
 	
@@ -212,4 +224,3 @@ int main(int argc, char *argv[])
 //      closedir(dr);
 	return 0;
 }
-
