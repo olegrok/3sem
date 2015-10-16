@@ -49,7 +49,7 @@ int main()
 			for_fork = fork();
 			if(for_fork < 0)
 			{
-				perror("Fork filed");
+				perror("Fork failed");
 				return -1;
 			}
 			if (for_fork == 0) {
