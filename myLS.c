@@ -27,12 +27,11 @@ char *bits_to_rwx(int bits)
 
 }
 
-int arguments_parsing(int argc, char **argv)
+int arguments_parsing(int argc, char **argv, char *flag)
 {
 	if (argc < 2)
 		return 0;
 	int for_getopt = 0;
-	int flags = 0;
 	while (1) {
 		int option_index = 0;
 		static struct option long_opt[] = {
@@ -45,23 +44,24 @@ int arguments_parsing(int argc, char **argv)
 		for_getopt =
 		    getopt_long(argc, argv, "ailnR", long_opt,
 				&option_index);
-		if (for_getopt == -1)
+		if (for_getopt == -1) {
 			break;
+		}
 		switch (for_getopt) {
 		case 'a':
-			flags |= 1;
+			flag[0] = 'a';
 			break;
 		case 'i':
-			flags |= 2;
+			flag[1] = 'i';
 			break;
 		case 'l':
-			flags |= 4;
+			flag[2] = 'l';
 			break;
 		case 'n':
-			flags |= 8;
+			flag[3] = 'n';
 			break;
 		case 'R':
-			flags |= 16;
+			flag[4] = 'R';
 			break;
 
 		case '?':
@@ -71,12 +71,11 @@ int arguments_parsing(int argc, char **argv)
 			printf
 			    ("?? getopt returned character code 0%o ??\n",
 			     for_getopt);
-
 		}
 	}
 
 
-	return flags;
+	return 0;
 
 }
 
@@ -100,22 +99,22 @@ char *concat_path(char *path, char *name)
 	return path;
 }
 
-int info(char *path, char *name, int flag)
+int info(char *path, char *name, const char *flag)
 {
 	struct stat ms = { };
 	if (stat(path, &ms) == -1) {
 		perror("Stat failed");
 		return -1;
 	}
-	if (flag & 2)
+	if (flag[1] == 'i')
 		printf("%d ", (int) ms.st_ino);
-	if (flag & 4 || flag & 8) {
+	if (flag[2] == 'l' || flag[3] == 'n') {
 		if (ms.st_mode & S_IFDIR)
 			printf("d");
 		else
 			printf("-");
 		bits_to_rwx(ms.st_mode);
-		if (flag & 8) {
+		if (flag[3] == 'n') {
 			printf("%d ", ms.st_uid);
 			printf("%d ", ms.st_gid);
 		} else {
@@ -138,14 +137,14 @@ int info(char *path, char *name, int flag)
 		time[strlen(time) - 1] = 0;
 		printf("%s ", time);
 		printf("%s\n", name);
-	} else
-		printf("%s	", name);
-	//printf("\n"); 
+	} else {
+		printf("%s\n", name);
+	}
 	return 0;
 }
 
 
-int directory_parse(char *path, int flags)
+int directory_parse(char *path, const char *flags)
 {
 	char *for_concat = 0;
 	int len = 0;
@@ -165,13 +164,16 @@ int directory_parse(char *path, int flags)
 		curr_dir = readdir(dr);
 		if (curr_dir == NULL)
 			break;
-		if (curr_dir->d_name[0] == '.' && !(flags & 1))
+		if (curr_dir->d_name[0] == '.' && !(flags[0] == 'a'))
 			continue;
 		len = strlen(path);
-
 		for_concat =
 		    (char *) calloc(len + strlen(curr_dir->d_name) + 128,
 				    1);
+		if (for_concat == NULL) {
+			perror("Calloc failed");
+			return -1;
+		}
 		strcpy(for_concat, path);
 
 		if (curr_dir->d_type == DT_DIR) {
@@ -180,7 +182,7 @@ int directory_parse(char *path, int flags)
 			info(for_concat, curr_dir->d_name, flags);
 			if (strcmp(curr_dir->d_name, ".")
 			    && strcmp(curr_dir->d_name, "..")) {
-				if (flags & 16) {
+				if (flags[4] == 'R') {
 					printf("\n%s:\n", path);
 					directory_parse(for_concat, flags);
 					printf("\n");
@@ -200,19 +202,14 @@ int directory_parse(char *path, int flags)
 	return 0;
 }
 
-
 int main(int argc, char *argv[])
 {
-	int flags = 0;
-	char *buf = 0;
-	flags = arguments_parsing(argc, argv);
+	char flag[] = "-----";
+	arguments_parsing(argc, argv, flag);
 
 	if (argv[argc - 1][0] == '-' || argc < 2) {
-		buf = (char *) calloc(1024, 1);
-		buf[0] = '.';
-		buf[1] = 0;
-		directory_parse(buf, flags);
-		free(buf);
+		char curr_path[] = { '.', 0 };
+		directory_parse(curr_path, flag);
 		return 0;
 	}
 
@@ -220,15 +217,10 @@ int main(int argc, char *argv[])
 	for (; i < argc; i++)
 		if (argv[i][0] != '-')
 			break;
-
 	for (; i < argc; i++) {
 		if (argv[i][0] == '/')
 			printf("\n%s:\n", argv[i]);
-		buf = (char *) calloc(1024, 1);
-		strcpy(buf, argv[i]);
-		directory_parse(buf, flags);
-		free(buf);
-
+		directory_parse(argv[i], flag);
 	}
 	printf("\n");
 	return 0;
