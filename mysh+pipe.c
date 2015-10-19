@@ -1,10 +1,13 @@
-#define size 1024
+#define size 4096
 #include <unistd.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
 #include <fcntl.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+
 
 int parse(char *str, char *arg[], const char *delim)
 {
@@ -45,7 +48,8 @@ int main()
 			break;
 		parts = parse(str, parts_array,"|");		
 		for (i = 0; i < parts; i++) {
-			pipe(pipefd1);
+			if(pipe(pipefd1) < 0)
+				perror("Pipe failed");
 			for_fork = fork();
 			if(for_fork < 0)
 			{
@@ -53,23 +57,59 @@ int main()
 				return -1;
 			}
 			if (for_fork == 0) {
-				close(pipefd1[0]);
+				if(close(pipefd1[0]) < 0){
+					perror("Close failed");
+					exit(-1);
+				}
 				parse(parts_array[i], args, " \n");
 				if (i != 0) {
-					close(pipefd2[1]);
-					dup2(pipefd2[0], 0);
+					/*if(close(pipefd2[1]) < 0){
+						perror("Close failed");											
+						exit(-1);						
+					}
+					*/					
+					if(dup2(pipefd2[0], 0) < 0){
+						perror("Dup2 failed");											
+						exit(-1);
+					}	
 				}
-				if (i != (parts - 1))
-					dup2(pipefd1[1], 1);
+				if (i != (parts - 1)){
+					if(dup2(pipefd1[1], 1) < 0){
+						perror("Dup2 failed");											
+						exit(-1);
+					}
+				}
+				else
+					if(close(pipefd1[1]) < 0){
+						perror("Close failed");											
+						exit(-1);
+					
+					}				
 				execvp(args[0], args);
 				perror("Exec");
 				return -1;
 			}
-			close(pipefd1[1]);
+			if(close(pipefd1[1]) < 0){
+					perror("Close failed");											
+				}
 			if (i != 0)
-				close(pipefd2[0]);
-			pipe(pipefd2);
-			dup2(pipefd1[0], pipefd2[0]);
+				if(close(pipefd2[0]) < 0){
+					perror("Close failed");											
+				}
+			if(pipe(pipefd2) < 0){
+				perror("Pipe failed");											
+			}
+			
+
+			if(close(pipefd2[1]) < 0){
+				perror("Close failed"); //!!!todo											
+			}
+					
+			if(dup2(pipefd1[0], pipefd2[0]) < 0){
+				perror("Dup2 failed");											
+			}
+			if(close(pipefd1[0]) < 0)
+				perror("Close failed");
 		}
 
 		for (i = 0; i < parts; i++)
