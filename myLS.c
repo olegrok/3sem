@@ -107,7 +107,7 @@ int info(char *path, char *name, const char *flag)
 		return -1;
 	}
 	if (flag[1] == 'i')
-		printf("%d ", (int) ms.st_ino);
+		printf("%-9d", (int) ms.st_ino);
 	if (flag[2] == 'l' || flag[3] == 'n') {
 		if (ms.st_mode & S_IFDIR)
 			printf("d");
@@ -136,9 +136,9 @@ int info(char *path, char *name, const char *flag)
 		char *time = ctime(&ms.st_mtime);
 		time[strlen(time) - 1] = 0;
 		printf("%s ", time);
-		printf("%s\n", name);
+		printf("%-50s\n", name);
 	} else {
-		printf("%s\n", name);
+		printf("%-50s\n", name);
 	}
 	return 0;
 }
@@ -183,7 +183,7 @@ int directory_parse(char *path, const char *flags)
 			if (strcmp(curr_dir->d_name, ".")
 			    && strcmp(curr_dir->d_name, "..")) {
 				if (flags[4] == 'R') {
-					printf("\n%s:\n", path);
+					printf("\n%s:\n", for_concat);
 					directory_parse(for_concat, flags);
 					printf("\n");
 				}
