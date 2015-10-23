@@ -10,6 +10,18 @@
 #include <grp.h>
 #include <pwd.h>
 #include <errno.h>
+#include <libgen.h>
+
+struct key {
+	int opt_all;
+	int opt_inode;
+	int opt_longlist;
+	int opt_numeric;
+	int opt_recursive;
+} key;
+
+
+
 
 char *bits_to_rwx(int bits)
 {
@@ -27,7 +39,7 @@ char *bits_to_rwx(int bits)
 
 }
 
-int arguments_parsing(int argc, char **argv, char *flag)
+int arguments_parsing(int argc, char **argv, struct key *keys)
 {
 	if (argc < 2)
 		return 0;
@@ -49,19 +61,19 @@ int arguments_parsing(int argc, char **argv, char *flag)
 		}
 		switch (for_getopt) {
 		case 'a':
-			flag[0] = 'a';
+			keys->opt_all++;
 			break;
 		case 'i':
-			flag[1] = 'i';
+			keys->opt_inode++;
 			break;
 		case 'l':
-			flag[2] = 'l';
+			keys->opt_longlist++;
 			break;
 		case 'n':
-			flag[3] = 'n';
+			keys->opt_numeric++;
 			break;
 		case 'R':
-			flag[4] = 'R';
+			keys->opt_recursive++;
 			break;
 
 		case '?':
@@ -76,16 +88,6 @@ int arguments_parsing(int argc, char **argv, char *flag)
 
 
 	return 0;
-
-}
-
-char *path_to_name(char *path)
-{
-	int len = strlen(path);
-	for (; len > 0; len--)
-		if (path[len] == '/')
-			return &path[++len];
-	return &path[len];
 }
 
 char *concat_path(char *path, char *name)
@@ -99,22 +101,22 @@ char *concat_path(char *path, char *name)
 	return path;
 }
 
-int info(char *path, char *name, const char *flag)
+int info(char *path, char *name, const struct key *keys)
 {
 	struct stat ms = { };
 	if (stat(path, &ms) == -1) {
 		perror("Stat failed");
 		return -1;
 	}
-	if (flag[1] == 'i')
+	if (keys->opt_inode)
 		printf("%-9d", (int) ms.st_ino);
-	if (flag[2] == 'l' || flag[3] == 'n') {
-		if (ms.st_mode & S_IFDIR)
+	if (keys->opt_longlist || keys->opt_numeric) {
+		if (S_ISDIR(ms.st_mode))
 			printf("d");
 		else
 			printf("-");
 		bits_to_rwx(ms.st_mode);
-		if (flag[3] == 'n') {
+		if (keys->opt_numeric) {
 			printf("%d ", ms.st_uid);
 			printf("%d ", ms.st_gid);
 		} else {
@@ -136,40 +138,38 @@ int info(char *path, char *name, const char *flag)
 		char *time = ctime(&ms.st_mtime);
 		time[strlen(time) - 1] = 0;
 		printf("%s ", time);
-		printf("%-50s\n", name);
+		printf("%s\n", name);
 	} else {
-		printf("%-50s\n", name);
+		printf("%s\n", name);
 	}
 	return 0;
 }
 
 
-int directory_parse(char *path, const char *flags)
+int directory_parse(char *path, const struct key *keys)
 {
 	char *for_concat = 0;
 	int len = 0;
 	DIR *dr = opendir(path);
 	if (dr == NULL) {
 		if (errno == ENOTDIR) {
-			char *name = path_to_name(path);
-			return info(path, name, flags);
+			return info(path, basename(path), keys);
 
 		} else {
 			perror("Opendir failed");
 			return -1;
 		}
 	}
+	printf("\nin %s:\n", basename(path));
 	struct dirent *curr_dir = 0;
 	while (1) {
 		curr_dir = readdir(dr);
 		if (curr_dir == NULL)
 			break;
-		if (curr_dir->d_name[0] == '.' && !(flags[0] == 'a'))
+		if (curr_dir->d_name[0] == '.' && !(keys->opt_all))
 			continue;
 		len = strlen(path);
-		for_concat =
-		    (char *) calloc(len + strlen(curr_dir->d_name) + 128,
-				    1);
+		for_concat = calloc(len + strlen(curr_dir->d_name) + 2, 1);
 		if (for_concat == NULL) {
 			perror("Calloc failed");
 			return -1;
@@ -179,23 +179,21 @@ int directory_parse(char *path, const char *flags)
 		if (curr_dir->d_type == DT_DIR) {
 			for_concat =
 			    concat_path(for_concat, curr_dir->d_name);
-			info(for_concat, curr_dir->d_name, flags);
+			info(for_concat, curr_dir->d_name, keys);
 			if (strcmp(curr_dir->d_name, ".")
 			    && strcmp(curr_dir->d_name, "..")) {
-				if (flags[4] == 'R') {
-					printf("\n%s:\n", for_concat);
-					directory_parse(for_concat, flags);
+				if (keys->opt_recursive) {
+					directory_parse(for_concat, keys);
 					printf("\n");
 				}
 			}
 		} else {
 			for_concat =
 			    concat_path(for_concat, curr_dir->d_name);
-			info(for_concat, curr_dir->d_name, flags);
+			info(for_concat, curr_dir->d_name, keys);
 		}
 
 		free(for_concat);
-		path[len] = 0;
 	}
 
 	closedir(dr);
@@ -204,23 +202,16 @@ int directory_parse(char *path, const char *flags)
 
 int main(int argc, char *argv[])
 {
-	char flag[] = "-----";
-	arguments_parsing(argc, argv, flag);
-
+	struct key keys = { 0, 0, 0, 0, 0 };
+	arguments_parsing(argc, argv, &keys);
 	if (argv[argc - 1][0] == '-' || argc < 2) {
-		char curr_path[] = { '.', 0 };
-		directory_parse(curr_path, flag);
+		directory_parse(".", &keys);
 		return 0;
 	}
 
-	int i = 1;
-	for (; i < argc; i++)
-		if (argv[i][0] != '-')
-			break;
+	int i = optind;
 	for (; i < argc; i++) {
-		if (argv[i][0] == '/')
-			printf("\n%s:\n", argv[i]);
-		directory_parse(argv[i], flag);
+		directory_parse(argv[i], &keys);
 	}
 	printf("\n");
 	return 0;
