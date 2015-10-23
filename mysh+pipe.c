@@ -1,4 +1,4 @@
-#define size 4096
+#define SIZE 4096
 #define EMPTYSTR -13
 #include <unistd.h>
 #include <stdio.h>
@@ -11,27 +11,23 @@
 #include <wctype.h>
 #include <errno.h>
 
-
 int exit_check(const char *str)
 {
 	int len = strlen(str);
 	int i = 0;
 	for (; i < len; i++) {
-		if (isgraph(str[i]))
+		if (!isspace(str[i]))
 			break;
 	}
-	if (str[i - 1] == '\n')
+	if (i == len)
 		return EMPTYSTR;
 	if (str[i] == '|') {
-		printf
-		    ("mybash: ошибка синтаксиса около неожиданной лексемы `|'\n");
+		fputs("mybash: ошибка синтаксиса около неожиданной лексемы `|'\n", stderr);
 		return EMPTYSTR;
 	}
 	if (i < len) {
-		if (!strncmp(&str[i], "myexit", 6) && !isgraph(str[i + 6]))
+		if (strncmp(&str[i], "myexit", 6) == 0)
 			return -1;
-		if (i == len)
-			return EMPTYSTR;
 	}
 	return 0;
 }
@@ -44,11 +40,9 @@ int parse(char *str, char *arg[], const char *delim)
 		return counter;
 	arg[counter] = fr_stk;
 	while (fr_stk != NULL) {
-
 		fr_stk = strtok(NULL, delim);
 		arg[counter + 1] = fr_stk;
 		counter++;
-
 	}
 	return counter;
 
@@ -57,19 +51,16 @@ int parse(char *str, char *arg[], const char *delim)
 
 int main()
 {
-	char str[size] = { };
-	char *args[size] = { };
-	char *parts_array[size] = { };
-	int str_ok = 0, parts = 0, i = 0, for_fork = 0;
+	char str[SIZE] = { };
+	char *args[SIZE] = { };
+	char *parts_array[SIZE] = { };
+	int str_ok = 0, parts = 0, i = 0;
 	int pipefd1[2] = { };
 	int pipefd2[2] = { };
-	char *for_fgets = 0;
 	while (1) {
-		printf("myshell $ ");
-		for_fgets = fgets(str, size, stdin);
-		if (for_fgets == NULL) {
-			if (errno == EIO)
-				return -1;
+		printf("myshell$ ");
+		if (fgets(str, SIZE, stdin) == NULL) {
+			printf("\n");
 			return 0;
 		}
 		str_ok = exit_check(str);
@@ -81,12 +72,7 @@ int main()
 		for (i = 0; i < parts; i++) {
 			if (pipe(pipefd1) < 0)
 				perror("Pipe failed");
-			for_fork = fork();
-			if (for_fork < 0) {
-				perror("Fork failed");
-				return -1;
-			}
-			if (for_fork == 0) {
+			if (fork() == 0) {
 				if (close(pipefd1[0]) < 0) {
 					perror("Close failed");
 					exit(-1);
@@ -132,8 +118,6 @@ int main()
 				if (close(pipefd2[0]) < 0)
 					perror("Close failed");
 			}
-			if (errno == EBADF)
-				break;
 		}
 
 		for (i = 0; i < parts; i++)
