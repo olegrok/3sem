@@ -1,5 +1,6 @@
 #define SIZE 4096
-#define EMPTYSTR -13
+#define WRONGSTR -13
+#define EMPTYSTR -12
 #include <unistd.h>
 #include <stdio.h>
 #include <string.h>
@@ -14,17 +15,23 @@
 int exit_check(const char *str)
 {
 	int len = strlen(str);
-	int i = 0;
+	int i = 0, j = 0;
 	for (; i < len; i++) {
 		if (!isspace(str[i]))
 			break;
 	}
 	if (i == len)
-		return EMPTYSTR;
+		return WRONGSTR;
 	if (str[i] == '|') {
 		fputs("mybash: ошибка синтаксиса около неожиданной лексемы `|'\n", stderr);
-		return EMPTYSTR;
+		return WRONGSTR;
 	}
+	for(j = len - 1; j > i; j--){
+		if (!isspace(str[j]))
+			break;			
+	}
+	if(str[j] == '|'){
+		return j + 1;}
 	if (i < len) {
 		if (strncmp(&str[i], "myexit", 6) == 0)
 			return -1;
@@ -35,13 +42,13 @@ int exit_check(const char *str)
 int parse(char *str, char *arg[], const char *delim)
 {
 	int counter = 0;
-	char *fr_stk = strtok(str, delim);
-	if (fr_stk == NULL)
+	char *parse_identifier = strtok(str, delim);
+	if (parse_identifier == NULL)
 		return counter;
-	arg[counter] = fr_stk;
-	while (fr_stk != NULL) {
-		fr_stk = strtok(NULL, delim);
-		arg[counter + 1] = fr_stk;
+	arg[counter] = parse_identifier;
+	while (parse_identifier != NULL) {
+		parse_identifier = strtok(NULL, delim);
+		arg[counter + 1] = parse_identifier;
 		counter++;
 	}
 	return counter;
@@ -54,22 +61,44 @@ int main()
 	char str[SIZE] = { };
 	char *args[SIZE] = { };
 	char *parts_array[SIZE] = { };
-	int str_ok = 0, parts = 0, i = 0;
+	int parts = 0, i = 0, pointer = 0, str_ok = 0;
 	int pipefd1[2] = { };
 	int pipefd2[2] = { };
 	while (1) {
+		pointer = 0;
+		str_ok = 0;
 		printf("myshell$ ");
-		if (fgets(str, SIZE, stdin) == NULL) {
-			printf("\n");
-			return 0;
+		do{
+			
+			if(str_ok)
+				printf("> ");
+			if(str_ok == EMPTYSTR)
+				str_ok = 0;
+			pointer += str_ok;
+			if (fgets(&str[pointer], SIZE - pointer, stdin) == NULL) {
+				printf("\n");
+				return 0;
+			}
+			str_ok = exit_check(&str[pointer]);
+			if(str_ok == EMPTYSTR){
+				if(pointer == 0){
+					break;
+				}
+				continue;}
+			if(str_ok < 0)
+				break;
+		
 		}
-		str_ok = exit_check(str);
-		if (str_ok == EMPTYSTR)
+		while(str_ok != 0);
+		if (str_ok == EMPTYSTR || str_ok == WRONGSTR)
 			continue;
 		if (str_ok == -1)
 			break;
 		parts = parse(str, parts_array, "|");
 		for (i = 0; i < parts; i++) {
+			pointer = exit_check(parts_array[i]);
+			if(pointer == -1)
+				return 0;
 			if (pipe(pipefd1) < 0)
 				perror("Pipe failed");
 			if (fork() == 0) {
