@@ -6,25 +6,53 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/wait.h>
-int sem_info(int boatid, int trapid)
-{
-	/*printf("Значение boatid = %d\n",
-	   semctl(boatid, 0, GETVAL));
-	   printf("Значение trapid[0] = %d\n",
-	   semctl(trapid, 0, GETVAL));
-	   printf("Значение trapid[1] = %d\n",
-	   semctl(trapid, 1, GETVAL)); */
+/*
+Несколько слов об алгоритме:
 
-	return 0;
-}
+Используемые семафоры:
+boatid - количество свободных мест на корабле
+trapid[0] - отвечает за вход на корабль	
+trapid[1] - отвечает за выход с корабля
+people - отвечает за то, чтобы каждый человек покатался
 
+Функции:
+Titanic:
+	while(1){
+	boatid = places				;свободные места на корабле появляются
+	trapid[0]++				;открытие трапа
+	boatid ? 0				;свободные места закончились?
+	
+	boatid = places				;на корабле places человек
+	trapid[1]++				;открыть трап
+	boatid ? 0				;корабль пуст
+	trapid[1]--				;трап закрыт
+	
+	if(people == 0)				;все человечки покатались
+		break;				;сжечь трап и утопить корабль
+
+passenger:
+	while(1){
+	if(people == 0)
+		break;				;если корабль сожжен, уйти с пляжа
+	trapid[0]--				;зайти на трап
+	boatid--				;занять место на корабле
+	if(boatid > 0)
+		trapid[0]++			;если свободные места есть, то трап будет освобожден
+	trapid[1]--				;спуститься по трапц
+	trapid[1]++				;освободить трап
+	boatid--				;место на корабле освободилось
+	}
+
+Условие завершения программы:
+Все люди покатались на корабле минимум один раз
+*/
 int Titanic(int boatid, int trapid, int places, int people)
 {
 
 	printf("Titanic   [%d]: Cоздан\n", getpid());
 	struct sembuf sem = { 0, 0, 0 };
 	while (1) {
-		//sem = {0, places, 0};         //новая поездка
+		//новая поездка
 		sem.sem_num = 0;
 		sem.sem_op = places;
 		sem.sem_flg = 0;
@@ -32,7 +60,7 @@ int Titanic(int boatid, int trapid, int places, int people)
 		printf("Titanic   [%d]: Новая поездка\n",
 		       getpid());
 
-		//sem = { 0, 1, 0 }             //трап на вход открыт
+		//трап на вход открыт
 		sem.sem_num = 0;
 		sem.sem_op = 1;
 		sem.sem_flg = 0;
@@ -40,8 +68,7 @@ int Titanic(int boatid, int trapid, int places, int people)
 		printf
 		    ("Titanic   [%d]: Открыл вход на трап\n",
 		     getpid());
-		sem_info(boatid, trapid);
-		//sem = {0, 0, 0};              //свободных мест больше нет
+		//свободных мест больше нет
 		sem.sem_num = 0;
 		sem.sem_op = 0;
 		sem.sem_flg = 0;
@@ -50,24 +77,19 @@ int Titanic(int boatid, int trapid, int places, int people)
 		    ("Titanic   [%d]: Свободные места закончились\n",
 		     getpid());
 
-		//sem = {0, -1, 0};             //трап закрыт
-		/*sem.sem_num = 0;
-		   sem.sem_op = -1;
-		   sem.sem_flg = 0;
-		   semop(trapid, &sem, 1); */
+		//трап закрыт
 		printf
 		    ("Titanic   [%d]: Закрыл вход на трап\n",
 		     getpid());
 
 		printf("Titanic   [%d]: Катаю\n", getpid());
 		//катание
-		//sem = {0, places, 0}          //Приехали
+		//Приехали
 		sem.sem_num = 0;
 		sem.sem_op = places;
 		sem.sem_flg = 0;
 		semop(boatid, &sem, 1);
-		//sem_info(boatid, trapid);
-		//sem = {1, 1, 0};              //трап на выход открыт
+		//трап на выход открыт
 		sem.sem_num = 1;
 		sem.sem_op = 1;
 		sem.sem_flg = 0;
@@ -76,14 +98,13 @@ int Titanic(int boatid, int trapid, int places, int people)
 		    ("Titanic   [%d]: Выход по трапу открыт\n",
 		     getpid());
 
-		//sem = {0, 0, 0};
+
 		sem.sem_num = 0;
 		sem.sem_op = 0;
 		sem.sem_flg = 0;
 		semop(boatid, &sem, 1);	//корабль пуст
 		printf("Titanic   [%d]: Корабль пуст\n",
 		       getpid());
-		//sem = {1, -1, 0};
 
 		sem.sem_num = 1;
 		sem.sem_op = -1;
@@ -106,16 +127,15 @@ int Titanic(int boatid, int trapid, int places, int people)
 }
 
 
-int passengers(int boatid, int trapid, int people)
+int passenger(int boatid, int trapid, int people)
 {
 	int satisfaction = 0;
 	struct sembuf sem = { 0, 0, 0 };
 	printf("Passanger [%d]: Cоздан\n", getpid());
-	//sem_info(boatid, trapid);
 	while (1) {
 		if (semctl(people, 0, GETVAL) == 0)
 			exit(0);
-		//sem = { 0, -1, 0 };           //зайти на трап
+		//зайти на трап
 		sem.sem_num = 0;
 		sem.sem_op = -1;
 		sem.sem_flg = 0;
@@ -123,48 +143,36 @@ int passengers(int boatid, int trapid, int people)
 			exit(0);
 		printf("Passanger [%d]: Зашел на трап\n",
 		       getpid());
-		sem_info(boatid, trapid);
 
-		//sem = {0, -1, 0};              //на корабле +1
+		//на корабле +1
 		sem.sem_num = 0;
 		sem.sem_op = -1;
 		sem.sem_flg = 0;
 		semop(boatid, &sem, 1);
 
 		if (semctl(boatid, 0, GETVAL) > 0) {
-			sem_info(boatid, trapid);
-			//sem = {0, 1, 0};      //выйти с трапа
+		//выйти с трапа
 			sem.sem_num = 0;
 			sem.sem_op = 1;
 			sem.sem_flg = 0;
-			semop(trapid, &sem, 1);
-			//sem_info(boatid, trapid);
-		}
-		printf
-		    ("Passanger [%d]: Освободил трап\n",
+			printf("Passanger [%d]: Освободил трап\n",
 		     getpid());
-		//sem_info(boatid, trapid);
-		/*//sem = {0, -1, 0};              //на корабле +1
-		   sem.sem_num = 0;
-		   sem.sem_op = -1;
-		   sem.sem_flg = 0;
-		   semop(boatid, &sem, 1); */
+			semop(trapid, &sem, 1);
+		}
+		else
+			printf("Passanger [%d]: Освободил трап\n",
+		     getpid());
 		printf("Passanger [%d]: На корабле\n", getpid());
 
-		sem_info(boatid, trapid);
 		satisfaction++;
 		if (satisfaction == 1) {
-			//sem = {0, -1, 0};
 			sem.sem_num = 0;
 			sem.sem_op = -1;
 			sem.sem_flg = 0;
-			printf("--people\n");
 			semop(people, &sem, 1);
 		}
-		//sem_info(boatid, trapid);
 		//Катается
-		//printf("Passanger [%d]: Катаюсь\n", getpid());
-		//sem = {1, -1, 0};             //выйти на трап
+		//выйти на трап
 		sem.sem_num = 1;
 		sem.sem_op = -1;
 		sem.sem_flg = 0;
@@ -172,35 +180,36 @@ int passengers(int boatid, int trapid, int people)
 		printf
 		    ("Passanger [%d]: Спускается по трапу\n",
 		     getpid());
-		//sem = {1, 1, 0};              //освободить трап
+		//освободить трап
 		sem.sem_num = 1;
 		sem.sem_op = 1;
 		sem.sem_flg = 0;
-		semop(trapid, &sem, 1);
-		printf
-		    ("Passanger [%d]: Трап освобожден\n",
-		     getpid());
-		//sem = {0, -1, 0};             //окончательно покинул кораболь      
+		printf("Passanger [%d]: Сошел с трапа. Покинул корабль\n",
+		       getpid());  
+		semop(trapid, &sem, 1);   
 		sem.sem_num = 0;
 		sem.sem_op = -1;
 		sem.sem_flg = 0;
 		semop(boatid, &sem, 1);
-		printf("Passanger [%d]: Покинул корабль\n",
-		       getpid());
+		
 		printf
-		    ("Passanger [%d]: Удовлетворен уже %d раз\n",
+		    ("Passanger [%d]: Катался уже %d раз\n",
 		     getpid(), satisfaction);
-		sem_info(boatid, trapid);
 	}
 
 	return 0;
 }
 
 
-int main()
+int main(int argc, char* argv[])
 {
-	int places = 2;
-	int pass = 5;
+	if(argc < 3){
+		printf("Неверное количество аргументов\n");
+		return -1;
+	}
+	int places = atoi(argv[1]);
+	int pass = atoi(argv[2]);
+	printf("Количество мест в корабле: %d\nКоличество отдыхающих на пляже: %d\n", places, pass);
 	struct sembuf sem = { 0, 0, 0 };
 	int boatid = 0;
 	boatid = semget(IPC_PRIVATE, 1, IPC_CREAT | 0666);
@@ -212,7 +221,7 @@ int main()
 
 	if (places > pass)
 		places = pass;
-	//sem = {0, pass, 0};
+	
 	sem.sem_num = 0;
 	sem.sem_op = pass;
 	sem.sem_flg = 0;
@@ -224,7 +233,7 @@ int main()
 	int i = 0;
 	for (; i < pass; i++) {
 		if (!fork()) {
-			passengers(boatid, trapid, people);
+			passenger(boatid, trapid, people);
 		}
 	}
 
@@ -233,8 +242,7 @@ int main()
 	semctl(trapid, 2, IPC_RMID);
 	for (i = 0; i < pass; i++)
 		wait(0);
-	printf("На пляже обнаружили %d трупов\n",
-	       pass);
+	printf("Пляж закрылся. Люди разошлись\n");
 	semctl(people, 1, IPC_RMID);
 	return 0;
 
