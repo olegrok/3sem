@@ -1,0 +1,93 @@
+sems:
+semaphore arrays:
+door_in,
+door_out,
+pass,
+key;
+
+position_up,
+position_down;
+
+shared arrays:
+places							;количество мест в лифте
+lift_point						;местонахождение лифта
+pass_point						;местонахождение пассажира
+
+
+initialization:
+lift_point = 0;						;изначально все лифты и отдыхающие вверху.
+pass_point = 0;
+
+
+algorithms:
+
+lift:
+if(lift_point == 0){					;появляются места для пассажиров
+	for(i = 0; i < 10; i++)
+		position_up++; 
+
+}
+else{
+	for(i = 0; i < 10; i++)
+		position_down++;
+
+}
+places = 10						;открыть дверь
+for(i = 0; i < 10; i++)					;разрешить вход [по сути комната перед лифтом, все, кто зашел в неё попадут в лифт]
+	key++
+door_in++						;поочередный вход
+
+...Высокопроизводительное простаивание...		
+
+if(lift_point == 0){					;лифт уезжает - его места недоступны	
+	for(i = 0; i < places; i++)
+		position_up--; 
+
+}
+else{
+	for(i = 0; i < places; i++)
+		position_down--;
+
+}
+
+door_in--						;закрыть дверь
+for(i = 0; i < places; i++)
+	key--;
+
+places[lift_id] = 10 - places[lift_id]			;поехать
+...Спуск\подъем...
+if(lift_point == 0)					;местонахождение лифта изменилось
+	lift_point++
+else
+	lift_point--							
+door_out++						;разрешить выход из лифта
+while(places != 0);					;ожидание пустого лифта
+door_out--
+
+
+
+
+passanger:
+if(pass_point == 0)					;пользуется лифтом на верхнем\нижнем этаже
+	position_up--
+else
+	position_down--
+for(i = 0; i < lift_number; i++)			;этот участок кода будет пропускать пассажиров к, возможно,
+	if(places[i] > 0 && lift_point == pass_point)	уже заполненному лифту, где они будут зависать. К сожалению, 
+		break;					не смог найти алгоритм выбора пассажиром лифта, исключающий это.
+key[i]--						;войти в лифт
+door_in[i]--							
+...Пассажир в i лифте...
+door_in[i]++
+places[i]--;						
+...Долгожданный отдых от галотерапии...
+door_out[i]--						;выход из лифта
+places[i]--
+door_out[i]++						;выпустить следующего
+if(pass_point == 0)					;местонахождение пассажира изменилось
+	pass_point++
+else
+	pass_point--
+
+
+
