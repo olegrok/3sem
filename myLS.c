@@ -43,7 +43,7 @@ int arguments_parsing(int argc, char **argv, struct key *keys)
 {
 	if (argc < 2)
 		return 0;
-	int for_getopt = 0;
+	int key_flag = 0;
 	while (1) {
 		int option_index = 0;
 		static struct option long_opt[] = {
@@ -53,13 +53,13 @@ int arguments_parsing(int argc, char **argv, struct key *keys)
 			{"recursive", 0, 0, 'R'},
 			{0, 0, 0, 0}
 		};
-		for_getopt =
+		key_flag =
 		    getopt_long(argc, argv, "ailnR", long_opt,
 				&option_index);
-		if (for_getopt == -1) {
+		if (key_flag == -1) {
 			break;
 		}
-		switch (for_getopt) {
+		switch (key_flag) {
 		case 'a':
 			keys->opt_all++;
 			break;
@@ -82,7 +82,7 @@ int arguments_parsing(int argc, char **argv, struct key *keys)
 		default:
 			printf
 			    ("?? getopt returned character code 0%o ??\n",
-			     for_getopt);
+			     key_flag);
 		}
 	}
 
@@ -148,7 +148,7 @@ int info(char *path, char *name, const struct key *keys)
 
 int directory_parse(char *path, const struct key *keys)
 {
-	char *for_concat = 0;
+	char *new_str = 0;
 	int len = 0;
 	DIR *dr = opendir(path);
 	if (dr == NULL) {
@@ -169,31 +169,31 @@ int directory_parse(char *path, const struct key *keys)
 		if (curr_dir->d_name[0] == '.' && !(keys->opt_all))
 			continue;
 		len = strlen(path);
-		for_concat = calloc(len + strlen(curr_dir->d_name) + 2, 1);
-		if (for_concat == NULL) {
+		new_str = calloc(len + strlen(curr_dir->d_name) + 2, 1);
+		if (new_str == NULL) {
 			perror("Calloc failed");
 			return -1;
 		}
-		strcpy(for_concat, path);
+		strcpy(new_str, path);
 
 		if (curr_dir->d_type == DT_DIR) {
-			for_concat =
-			    concat_path(for_concat, curr_dir->d_name);
-			info(for_concat, curr_dir->d_name, keys);
+			new_str =
+			    concat_path(new_str, curr_dir->d_name);
+			info(new_str, curr_dir->d_name, keys);
 			if (strcmp(curr_dir->d_name, ".")
 			    && strcmp(curr_dir->d_name, "..")) {
 				if (keys->opt_recursive) {
-					directory_parse(for_concat, keys);
+					directory_parse(new_str, keys);
 					printf("\n");
 				}
 			}
 		} else {
-			for_concat =
-			    concat_path(for_concat, curr_dir->d_name);
-			info(for_concat, curr_dir->d_name, keys);
+			new_str =
+			    concat_path(new_str, curr_dir->d_name);
+			info(new_str, curr_dir->d_name, keys);
 		}
 
-		free(for_concat);
+		free(new_str);
 	}
 
 	closedir(dr);
