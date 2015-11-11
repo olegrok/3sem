@@ -93,7 +93,7 @@ void Passenger(struct pass_options_struct pass_options, int* non_zombie){
 
 }
 
-void Lift(int* places, int point, struct lift_options_struct lift_options, int* non_zombie){
+void Lift(int* places, struct lift_options_struct lift_options, int* non_zombie){
 	int id = lift_options.id;
 	int key_up = lift_options.key_in;
 	int key_down = lift_options.key_out;
@@ -101,6 +101,7 @@ void Lift(int* places, int point, struct lift_options_struct lift_options, int* 
 	int door_out = lift_options.door_out;
 	int border = lift_options.border;
 	int key = 0;
+	int point = 0;
 	printf("Lift[%d]:	Установлен в санатории\n", id);
 	while(1){
 		if((*non_zombie) == 0)
@@ -114,7 +115,7 @@ void Lift(int* places, int point, struct lift_options_struct lift_options, int* 
 		V(border, id);
 		V(key, id);
 		V(door_in, id);
-		//sleep(1);
+		sleep(1);
 		P(key, id);
 		P(door_in, id);
 		if(places > 0)
@@ -156,10 +157,8 @@ int main(int argc, char *argv[]){
 
 //shm
 	int places_id = shmget(IPC_PRIVATE, sizeof(int) * lift_num, IPC_CREAT | 0666);
-	int lift_point_id = shmget(IPC_PRIVATE, sizeof(int) * lift_num, IPC_CREAT | 0666);
 	int non_zombie_id = shmget(IPC_PRIVATE, sizeof(int), IPC_CREAT | 0666);
 	int* places = shmat(places_id, 0, 0);
-	int* lift_point = shmat(lift_point_id, 0, 0);
 	int* non_zombie = shmat(non_zombie_id, 0, 0);
 	(*non_zombie) = pass_num;
 
@@ -168,14 +167,13 @@ int main(int argc, char *argv[]){
 
 	for(i = 0; i < lift_num; i++){
 		places[i] = 0;
-		lift_point[i] = 0;
 	}
 
 //initialization
 	for(i = 0; i < lift_num; i++){
 		lift_options.id = i;
 		if(fork() == 0){
-			Lift(places, lift_point[i], lift_options, non_zombie);
+			Lift(places, lift_options, non_zombie);
 			exit(0);
 		}
 	}
@@ -198,10 +196,8 @@ int main(int argc, char *argv[]){
 	semctl(border, lift_num, IPC_RMID);
 //shm
 	shmdt(places);
-	shmdt(lift_point);
 	shmdt(non_zombie);
 	shmctl(places_id, IPC_RMID, NULL);
-	shmctl(lift_point_id, IPC_RMID, NULL);
 	shmctl(non_zombie_id, IPC_RMID, NULL);
 	return 0;
 }
