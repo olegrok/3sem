@@ -28,7 +28,7 @@ int exit_check(const char *str)
 	}
 	for(j = len - 1; j > i; j--){
 		if (!isspace(str[j]))
-			break;			
+			break;
 	}
 	if(str[j] == '|'){
 		return j + 1;}
