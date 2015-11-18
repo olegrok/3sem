@@ -44,23 +44,25 @@ void *reader(void *arg)
 	char *queue = arguments->queue;
 	int bufsize = arguments->bufsize;
 	//printf("bufsize = %d\n", bufsize);
-	char *reader_buffer = calloc(1, portion);
-	int j = 0, flag = 0, i = 0;
+	char *reader_buffer = calloc(1, portion + 1);
+	int counter = 0, flag = 0, i = 0;
 
 	int tstart = 0, tend = 0;
 
 	while ((flag = read(0, reader_buffer, portion)) > 0) {
 //		printf("reader: read %d = %s\n", flag, reader_buffer);
+
 			_LOCK(&cmutex);
 			//printf("reader: mutex lock\n");
 			tend = (start + bufsize - 1) % bufsize;
-			tstart = j;
+			tstart = counter;
 			_UNLOCK(&cmutex);
 
 			for(i = 0; i < flag; i++)
 			{
 				//printf("READER: i = %d 		end = %d\n", (i + tstart) % bufsize, tend);
 				if((i + tstart) % bufsize == tend){
+
 					_LOCK(&cmutex);
 					end = tend;
 //					printf("new end = %d\n", end);
@@ -69,16 +71,17 @@ void *reader(void *arg)
 //						printf("start = %d   end = %d\n", start, end);
 						pthread_cond_wait(&cond_read, &cmutex);
 					}
-
 					tend = start;
 					_UNLOCK(&cmutex);
+
 				}
+
 				queue[(i + tstart) % bufsize] = reader_buffer[i];
 				//printf("RDqueue[%d] = %c\n", (i + tstart) % bufsize, queue[(i + tstart) % bufsize]);
 			}
 //			printf("i = %dend = %d\n", (i + tstart) % bufsize, tend);
 			_LOCK(&cmutex);
-			j = (i + tstart) % bufsize;
+			counter = (i + tstart) % bufsize;
 			end = (i + tstart + bufsize) % bufsize;
 			pthread_cond_signal(&cond_write);
 			_UNLOCK(&cmutex);
@@ -86,7 +89,6 @@ void *reader(void *arg)
 	//printf("Loop exit\n");
 
 	_LOCK(&cmutex);
-	//pthread_cond_wait(&cond_write, &cmutex);
 	_LOCK(&check);
 	last_message++;
 	_UNLOCK(&check);
@@ -109,11 +111,11 @@ void *writer(void *arguments)
 	//printf("Writer create\n");
 	//while (1) {
 		_LOCK(&cmutex);
-		tstart = 0;
 		tend = end;
 		_UNLOCK(&cmutex);
 
 		for(; ; i++){
+
 			_LOCK(&check);
 			if(last_message && start == end){
 				printf("W: last_message1\n");
@@ -127,8 +129,10 @@ void *writer(void *arguments)
 				_LOCK(&cmutex);
 				start = (tstart + i) % bufsize;
 				pthread_cond_signal(&cond_read);
+				_LOCK(&check);
 				if(last_message && start == end)
 					break;
+				_UNLOCK(&check);
 				while(start == end){
 					//printf("Wcond: start = %d end = %d\n", start, end);
 					pthread_cond_wait(&cond_write, &cmutex);
