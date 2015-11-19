@@ -14,8 +14,8 @@ struct pth_args {
 	int bufsize;
 	char *queue;
 	int reader_size;
-	pthread_mutex_t* mutex;
-	pthread_mutex_t* check;
+	pthread_mutex_t *mutex;
+	pthread_mutex_t *check;
 	pthread_cond_t *cond_read;
 	pthread_cond_t *cond_write;
 	int last_message;
@@ -23,7 +23,8 @@ struct pth_args {
 	int end;
 };
 
-int mygetopt(int argc, char* argv[], int* bufsize, int* reader_size){
+int mygetopt(int argc, char *argv[], int *bufsize, int *reader_size)
+{
 	int opt = 0;
 	while ((opt = getopt(argc, argv, "b:n:")) != -1) {
 		switch (opt) {
@@ -81,11 +82,13 @@ void *reader(void *arguments)
 				_LOCK(arg->mutex);
 				arg->end = tend;
 				pthread_cond_signal(arg->cond_write);
-				while ((arg->end + 1) % bufsize == arg->start) {
+				while ((arg->end + 1) % bufsize ==
+				       arg->start) {
 					pthread_cond_wait(arg->cond_read,
 							  arg->mutex);
 				}
-				tend = (arg->start + bufsize - 1) % bufsize;
+				tend =
+				    (arg->start + bufsize - 1) % bufsize;
 				_UNLOCK(arg->mutex);
 			}
 
@@ -135,12 +138,14 @@ void *writer(void *arguments)
 			pthread_cond_signal(arg->cond_read);
 			while (arg->start == arg->end) {
 				_LOCK(arg->check);
-				if (arg->last_message && (arg->start == arg->end)) {
+				if (arg->last_message
+				    && (arg->start == arg->end)) {
 					_UNLOCK(arg->check);
 					break;
 				}
 				_UNLOCK(arg->check);
-				pthread_cond_wait(arg->cond_write, arg->mutex);
+				pthread_cond_wait(arg->cond_write,
+						  arg->mutex);
 			}
 			tend = arg->end;
 			tstart = arg->start;
@@ -175,7 +180,7 @@ int main(int argc, char *argv[])
 	int bufsize = 0;
 	int reader_size = 0;
 
-	if(mygetopt(argc, argv, &bufsize, &reader_size) < 0)
+	if (mygetopt(argc, argv, &bufsize, &reader_size) < 0)
 		return -1;
 
 	arg->bufsize = bufsize;
@@ -202,11 +207,11 @@ int main(int argc, char *argv[])
 	pthread_t pth_reader = 0;
 	pthread_t pth_writer = 0;
 
-	if(pthread_create(&pth_reader, NULL, &reader, arg) < 0){
+	if (pthread_create(&pth_reader, NULL, &reader, arg) < 0) {
 		perror("thread_create");
 		return -1;
 	}
-	if(pthread_create(&pth_writer, NULL, &writer, arg)){
+	if (pthread_create(&pth_writer, NULL, &writer, arg) < 0) {
 		perror("thread_create");
 		return -1;
 	}
