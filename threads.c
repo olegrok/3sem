@@ -11,85 +11,64 @@
 struct pth_args {
 	int bufsize;
 	char *queue;
-	int* reader_size;
-	pthread_mutex_t mutex;
-	pthread_mutex_t check;
-	pthread_cond_t* cond_read;
-	pthread_cond_t* cond_write;
-	int *last_message;
-	int *start;
-	int *end;
+	int reader_size;
+	pthread_mutex_t* mutex;
+	pthread_mutex_t* check;
+	pthread_cond_t *cond_read;
+	pthread_cond_t *cond_write;
+	int last_message;
+	int start;
+	int end;
 };
-
-
-//int last_message = 0;
 
 void *reader(void *arguments)
 {
 	struct pth_args *arg = arguments;
 	int bufsize = arg->bufsize;
 	char *queue = arg->queue;
-	pthread_mutex_t mutex = arg -> mutex;
-	pthread_mutex_t check = arg -> check;
 
-	pthread_cond_t* cond_read = arg -> cond_read;
-	pthread_cond_t* cond_write = arg -> cond_write;
-
-	int* start = arg->start;
-	int* end = arg->end;
-
-	int* reader_size = arg->reader_size;
-
-	int* last_message = arg->last_message;
-
-	char *reader_buffer = calloc(1, (*reader_size) + 1);
+	char *reader_buffer = calloc(1, arg->reader_size + 1);
 	int counter = 0, flag = 0, i = 0;
-
 	int tstart = 0, tend = 0;
 
-	while ((flag = read(0, reader_buffer, (*reader_size))) > 0) {
-//              printf("reader: read %d = %s\n", flag, reader_buffer);
-
-		_LOCK(&mutex);
+	while ((flag = read(0, reader_buffer, arg->reader_size)) > 0) {
+		_LOCK(arg->mutex);
 		//printf("reader: mutex lock\n");
-		tend = ((*start) + bufsize - 1) % bufsize;
+		tend = (arg->start + bufsize - 1) % bufsize;
 		tstart = counter;
-		_UNLOCK(&mutex);
+		_UNLOCK(arg->mutex);
 
 		for (i = 0; i < flag; i++) {
-			//printf("READER: i = %d                end = %d\n", (i + tstart) % bufsize, tend);
 			if ((i + tstart) % bufsize == tend) {
-				_LOCK(&mutex);
-				(*end) = tend;
-				pthread_cond_signal(cond_write);
-				while (((*end) + 1) % bufsize == (*start)) {
-//		            printf("start = %d   end = %d\n", *start, *end);
-					pthread_cond_wait(cond_read,
-							  &mutex);
+				_LOCK(arg->mutex);
+				arg->end = tend;
+				pthread_cond_signal(arg->cond_write);
+				while ((arg->end + 1) % bufsize == arg->start) {
+//                          printf("start = %d   end = %d\n", *start, *end);
+					pthread_cond_wait(arg->cond_read,
+							  arg->mutex);
 				}
-				tend = ((*start) + bufsize - 1) % bufsize;	//?
-				_UNLOCK(&mutex);
+				tend = (arg->start + bufsize - 1) % bufsize;
+				_UNLOCK(arg->mutex);
 			}
 
 			queue[(i + tstart) % bufsize] = reader_buffer[i];
 			//printf("RDqueue[%d] = %c\n", (i + tstart) % bufsize, queue[(i + tstart) % bufsize]);
 		}
 //                      printf("i = %dend = %d\n", (i + tstart) % bufsize, tend);
-		_LOCK(&mutex);
+		_LOCK(arg->mutex);
 		counter = (i + tstart) % bufsize;
-		(*end) = (i + tstart) % bufsize;
-		pthread_cond_signal(cond_write);
-		_UNLOCK(&mutex);
+		arg->end = (i + tstart) % bufsize;
+		pthread_cond_signal(arg->cond_write);
+		_UNLOCK(arg->mutex);
 	}
-	//printf("Loop exit\n");
 
-	_LOCK(&mutex);
-	_LOCK(&check);
-	(*last_message)++;
-	_UNLOCK(&check);
-	//printf("Pre_end_cond: end = %d", end);
-	pthread_cond_signal(cond_write);
-	_UNLOCK(&mutex);
+	_LOCK(arg->mutex);
+	_LOCK(arg->check);
+	arg->last_message++;
+	_UNLOCK(arg->check);
+	pthread_cond_signal(arg->cond_write);
+	_UNLOCK(arg->mutex);
 	free(reader_buffer);
 	return 0;
 }
@@ -100,68 +79,60 @@ void *writer(void *arguments)
 	struct pth_args *arg = arguments;
 	int bufsize = arg->bufsize;
 	char *queue = arg->queue;
-	pthread_mutex_t mutex = arg -> mutex;
-	pthread_mutex_t check = arg -> check;
-
-	pthread_cond_t* cond_read = arg -> cond_read;
-	pthread_cond_t* cond_write = arg -> cond_write;
-	int* start = arg->start;
-	int* end = arg->end;
-
-	int* last_message = arg->last_message;
 
 	int tend = 0, tstart = 0;
 	int i = 0;
 	char *writer_buffer = calloc(1, bufsize);
 	//printf("Writer create\n");
-	_LOCK(&mutex);
-	tend = *end;
-	_UNLOCK(&mutex);
+	_LOCK(arg->mutex);
+	tend = arg->end;
+	_UNLOCK(arg->mutex);
 
-	for (;; i++) {
+	while (1) {
 
-		_LOCK(&check);
-		if ((*last_message) && (*start) == (*end)) {
+		_LOCK(arg->check);
+		if (arg->last_message && (arg->start == arg->end)) {
 			break;
 		}
-		_UNLOCK(&check);
+		_UNLOCK(arg->check);
 
 //                      printf("WRITE: tstart = %d      tend = %d\n", tstart, tend);
 		if ((tstart + i) % bufsize == tend) {
 			write(1, writer_buffer, i);
-			_LOCK(&mutex);
-			(*start) = (tstart + i) % bufsize;
-			pthread_cond_signal(cond_read);
-			while ((*start) == (*end)) {
-				_LOCK(&check);
-				//printf("Wcond: start = %d end = %d\n last_message = %d", *start, *end, *last_message);
-				if ((*last_message) && (*start) == (*end)){
-					_UNLOCK(&check);
+			_LOCK(arg->mutex);
+			arg->start = (tstart + i) % bufsize;
+			pthread_cond_signal(arg->cond_read);
+			while (arg->start == arg->end) {
+				_LOCK(arg->check);
+				//printf("Wcond: start = %d end = %d\n last_message = %d", *start, *end, last_message);
+				if (arg->last_message && (arg->start == arg->end)) {
+					_UNLOCK(arg->check);
 					break;
 				}
-				_UNLOCK(&check);
-				pthread_cond_wait(cond_write, &mutex);
+				_UNLOCK(arg->check);
+				pthread_cond_wait(arg->cond_write, arg->mutex);
 			}
-			tend = *end;
-			tstart = *start;
-			_UNLOCK(&mutex);
-			i = -1;
+			tend = arg->end;
+			tstart = arg->start;
+			_UNLOCK(arg->mutex);
+			i = 0;
 			continue;
 		}
 		//printf("i%dWRqueue[%d] = %c\n", i,(tstart + i) % bufsize, queue[(tstart + i) % bufsize]);
 		writer_buffer[i % bufsize] = queue[(tstart + i) % bufsize];
 		if ((i + 1) % bufsize == 0) {
 			write(1, writer_buffer, bufsize - 1);
-			_LOCK(&mutex);
-			(*start) += (bufsize - 1);
-			(*start) %= bufsize;
-			tstart = (*start);
-			tend = ((*end) + bufsize - 1) % bufsize;
-			pthread_cond_signal(cond_read);
-			_UNLOCK(&mutex);
-			i = -1;
+			_LOCK(arg->mutex);
+			arg->start += (bufsize - 1);
+			arg->start %= bufsize;
+			tstart = arg->start;
+			tend = (arg->end + bufsize - 1) % bufsize;
+			pthread_cond_signal(arg->cond_read);
+			_UNLOCK(arg->mutex);
+			i = 0;
 			continue;
 		}
+		i++;
 	}
 	free(writer_buffer);
 	return 0;
@@ -175,33 +146,37 @@ int main(int argc, char *argv[])
 	void *res = 0;
 
 	int opt = 0;
-	while((opt = getopt(argc, argv, "b:n:")) != -1){
-		switch(opt){
-			case 'b':
-				bufsize  = atoi(optarg);
-				if(bufsize < 2){
-					fputs("The buffer size must be greater than 1\n", stderr);
-					return -1;
-				}
-				break;
-			case 'n':
-				reader_size = atoi(optarg);
-				if(reader_size < 1){
-					fputs("The reader size must be greater than 0\n", stderr);
-					return -1;
-				}
-				break;
-			default:
-				fprintf(stderr, "Usage: %s [-t nsecs] [-n] name\n",
-                           argv[0]);
+	while ((opt = getopt(argc, argv, "b:n:")) != -1) {
+		switch (opt) {
+		case 'b':
+			bufsize = atoi(optarg);
+			if (bufsize < 2) {
+				fputs
+				    ("The buffer size must be greater than 1\n",
+				     stderr);
 				return -1;
+			}
+			break;
+		case 'n':
+			reader_size = atoi(optarg);
+			if (reader_size < 1) {
+				fputs
+				    ("The reader size must be greater than 0\n",
+				     stderr);
+				return -1;
+			}
+			break;
+		default:
+			fprintf(stderr, "Usage: %s [-key] [-value]\n",
+				argv[0]);
+			return -1;
 		}
 
 	}
 
-	if(bufsize == 0)
+	if (bufsize == 0)
 		bufsize = 64;
-	if(reader_size == 0)
+	if (reader_size == 0)
 		reader_size = 64;
 
 
@@ -210,8 +185,8 @@ int main(int argc, char *argv[])
 	arg->queue = calloc(1, arg->bufsize);
 	pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 	pthread_mutex_t check = PTHREAD_MUTEX_INITIALIZER;
-	arg->mutex = mutex;
-	arg->check = check;
+	arg->mutex = &mutex;
+	arg->check = &check;
 
 	pthread_cond_t cond_read = PTHREAD_COND_INITIALIZER;
 	pthread_cond_t cond_write = PTHREAD_COND_INITIALIZER;
@@ -220,14 +195,13 @@ int main(int argc, char *argv[])
 
 	int start = 0;
 	int end = 0;
-	arg->start = &start;
-	arg->end = &end;
+	arg->start = start;
+	arg->end = end;
 
-	//reader_size = 4;
-	arg->reader_size = &reader_size;
+	arg->reader_size = reader_size;
 
 	int last_message = 0;
-	arg->last_message = &last_message;
+	arg->last_message = last_message;
 
 	pthread_t pth_reader = 0;
 	pthread_t pth_writer = 0;
