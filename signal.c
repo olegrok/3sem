@@ -50,12 +50,16 @@ int send(char *path)
 	pid_t ppid = getppid();
 	int fd = 0;
 	char buf = 0;
-	sigset_t set;
-	sigemptyset(&set);
+
 	struct sigaction act = { 0 };
 	act.sa_handler = empty;
 	sigfillset(&act.sa_mask);
 	sigaction(SIGUSR1, &act, 0);
+
+	sigset_t set;
+	sigemptyset(&set);
+	sigaddset(&set, SIGUSR1);
+	sigprocmask(SIG_BLOCK, &set, 0);
 
 	sigfillset(&set);
 	sigdelset(&set, SIGUSR1);
