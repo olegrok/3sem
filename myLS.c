@@ -11,6 +11,9 @@
 #include <pwd.h>
 #include <errno.h>
 #include <libgen.h>
+#include <fcntl.h>
+#include <limits.h>
+
 
 struct key {
 	int opt_all;
@@ -104,17 +107,25 @@ char *concat_path(char *path, char *name)
 int info(char *path, char *name, const struct key *keys)
 {
 	struct stat ms = { };
-	if (stat(path, &ms) == -1) {
+	int len = 0;
+	char buf[1024] = { 0 };
+	if (lstat(path, &ms) == -1) {
 		perror("Stat failed");
 		return -1;
 	}
 	if (keys->opt_inode)
 		printf("%-9d", (int) ms.st_ino);
 	if (keys->opt_longlist || keys->opt_numeric) {
-		if (S_ISDIR(ms.st_mode))
+		switch (ms.st_mode & S_IFMT) {
+		case S_IFLNK:
+			printf("l");
+			break;
+		case S_IFDIR:
 			printf("d");
-		else
+			break;
+		default:
 			printf("-");
+		}
 		bits_to_rwx(ms.st_mode);
 		if (keys->opt_numeric) {
 			printf("%d ", ms.st_uid);
@@ -138,7 +149,21 @@ int info(char *path, char *name, const struct key *keys)
 		char *time = ctime(&ms.st_mtime);
 		time[strlen(time) - 1] = 0;
 		printf("%s ", time);
-		printf("%s\n", name);
+		printf("%s", name);
+		if (S_ISLNK(ms.st_mode)) {
+			if ((len = readlink(path, buf, 1024)) < 0) {
+				perror("Readlink failed");
+				return -1;
+			}
+			buf[len] = 0;
+			printf(" -> %s", buf);
+			realpath(path, buf);
+			if(stat(buf, &ms) == -1){
+				if(errno == ENOENT)
+					printf(" [broken]");
+			}
+		}
+		printf("\n");
 	} else {
 		printf("%s\n", name);
 	}
@@ -177,8 +202,7 @@ int directory_parse(char *path, const struct key *keys)
 		strcpy(new_str, path);
 
 		if (curr_dir->d_type == DT_DIR) {
-			new_str =
-			    concat_path(new_str, curr_dir->d_name);
+			new_str = concat_path(new_str, curr_dir->d_name);
 			info(new_str, curr_dir->d_name, keys);
 			if (strcmp(curr_dir->d_name, ".")
 			    && strcmp(curr_dir->d_name, "..")) {
@@ -188,8 +212,7 @@ int directory_parse(char *path, const struct key *keys)
 				}
 			}
 		} else {
-			new_str =
-			    concat_path(new_str, curr_dir->d_name);
+			new_str = concat_path(new_str, curr_dir->d_name);
 			info(new_str, curr_dir->d_name, keys);
 		}
 
